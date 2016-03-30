@@ -1,0 +1,11 @@
+--- a/Makefile	2015-06-12 14:44:03.112042002 +0800
++++ b/Makefile	2015-06-12 14:49:36.740053283 +0800
+@@ -156,7 +156,7 @@
+ 	$(CC) $(CFLAGS) $(COPTS) $(i18n) $(build_cflags) $(RPM_OPT_FLAGS) -c $<	
+ 
+ dnsmasq : $(objs)
+-	$(CC) $(LDFLAGS) -o $@ $(objs) $(build_libs) $(LIBS) 
++	$(CC) $(LDFLAGS) -ldl -o $@ $(objs) $(build_libs) $(LIBS) 
+ 
+ dnsmasq.pot : $(objs:.o=.c) $(hdrs)
+ 	$(XGETTEXT) -d dnsmasq --foreign-user --omit-header --keyword=_ -o $@ -i $(objs:.o=.c)

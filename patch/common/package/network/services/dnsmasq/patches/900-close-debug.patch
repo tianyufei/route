@@ -1,0 +1,11 @@
+--- a/src/forward.c	2015-07-01 11:54:17.397016739 +0800
++++ b/src/forward.c	2015-07-01 23:54:15.830057796 +0800
+@@ -1611,7 +1611,7 @@
+ 
+ 	int redirect = 0;
+ 	int ad_reqd, do_bit;
+-	dns_debug_output(1,"start--------\n");
++//	dns_debug_output(1,"start--------\n");
+ //	if(func_find_black_ip && func_query_status ){
+ 	if(func_query_status ){
+ 		char redirect_ip[80];

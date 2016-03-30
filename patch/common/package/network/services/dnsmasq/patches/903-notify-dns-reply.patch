@@ -1,0 +1,105 @@
+--- a/src/forward.c	2015-12-06 15:10:28.409618203 +0800
++++ b/src/forward.c	2015-12-07 16:59:01.979062922 +0800
+@@ -36,7 +36,7 @@
+ 
+ static void *g_libHandle = NULL;
+ static int (*func_query_status)(char *, char *, char *, int) = NULL;
+-static int (*func_notify_domain_ip)(char *, char *, long ) = NULL;
++static int (*func_notify_domain_ip)(char *, char *, char *, long ) = NULL;
+ static int (*func_find_black_ip)(char *, char *) = NULL;
+ static int (*func_set_debug_info)(void (*debug_func)(int level, char* content)) = NULL;
+ 
+@@ -193,14 +193,65 @@
+ 
+ 
+ /*¨ª¡§?awal??¡¤¡é¡ã¡Á??¦Ì£¤*/
+-#define WEB_SITE_LEN_MAX 255
+-int notify_to_wal(int num, char * query_ptr)
++#define WEB_SITE_LEN_MAX 256
++int notify_to_wal(char* mac,int num, char * query_ptr)
+ {
+-	char website[WEB_SITE_LEN_MAX+1];
++	static char website[WEB_SITE_LEN_MAX] = {0};
+ 	char *ptr = query_ptr;
+ 	int tmp = 0,len = 0;
++	short type = 0;
++	short cls = 0;
++	int i = 0;
++	static char dbg[WEB_SITE_LEN_MAX] = {0};
++
++	//zdj
++//	snprintf(dbg,sizeof(dbg)-1,"echo \"|%c|%c%c%c%c%c%c%c%c%c|\" >> /tmp/dnsdbg.log",
++//		ptr[0],ptr[1],ptr[2],ptr[3],ptr[4],ptr[5],ptr[6],ptr[7],ptr[8],ptr[9]);
++//	system(dbg);
++
++//	return 0;
++	
++	strncpy(website,ptr,sizeof(website));
++	ptr += strlen(ptr) + 1;
++	type = ntohs(*(short*)ptr);
++	ptr += sizeof(type);
++	cls = ntohs(*(short*)ptr);
++	ptr += sizeof(cls);
++
++//	snprintf(dbg,sizeof(dbg)-1,"echo 'lookup:%s,get: type=%d, cls=%d, num=%d' >> /tmp/dnsdbg.log",&website[1],type,cls,num);
++//	system(dbg);
++
++
++	for(i=0;i<num;i++)
++	{
++		DNS_RESPONSE *pResp = (DNS_RESPONSE *)ptr;
++
++		if(pResp->length == IPV4_ADDR_LEN)
++		{
++			char rsp_ip[64] = {0};
++			snprintf(rsp_ip,sizeof(rsp_ip)-1,"%s",inet_ntoa(pResp->addr));
++//			snprintf(dbg,sizeof(dbg)-1,"echo 'rsp[%d]%s,ttl=%d' >> /tmp/dnsdbg.log",i,rsp_ip,pResp->ttl);
++//			system(dbg);
++			if(func_notify_domain_ip)
++			{
++				func_notify_domain_ip(mac, &website[1], rsp_ip,pResp->ttl);
++			}
++			ptr += sizeof(DNS_RESPONSE);			
++		}
++		else
++		{
++			snprintf(dbg,sizeof(dbg)-1,"echo 'lookup:%s, rsp[%d] get ipv6 addr,ttl=%d' >> /tmp/dnsdbg.log",
++				&website[1],i,pResp->ttl);
++			system(dbg);
++			ptr += sizeof(DNS_RESPONSE)+(pResp->length - IPV4_ADDR_LEN);			
++		}
++	}
++	return 0;
+ 	
+-	my_syslog(LOG_ERR, _("query_ptr %s\n"), query_ptr);
++#if 0
++
++	
++//	my_syslog(LOG_ERR, _("query_ptr %s\n"), query_ptr);
+ 	memset(website, 0, WEB_SITE_LEN_MAX+1);
+ 	
+ 	while(*ptr!=0)
+@@ -260,6 +311,7 @@
+ 	}
+ 
+ 	return 0;
++#endif	
+ }
+ 
+ /* Send a UDP packet with its source address set as "source" 
+@@ -1304,8 +1356,13 @@
+ 			      forward->flags & FREC_AD_QUESTION, forward->flags & FREC_DO_QUESTION, 
+ 			      forward->flags & FREC_ADDED_PHEADER, forward->flags & FREC_HAS_SUBNET, &forward->source)))
+ 	{
+-//	  if(header->qdcount)		
+-//	  	 notify_to_wal(header->ancount, daemon->packet+12);
++	  if(header->qdcount){
++			char mac[128] = {0};
++			char srcip[44] = {0};
++			snprintf(srcip,sizeof(srcip)-1,"%s",inet_ntoa(forward->source.in.sin_addr));
++			dns_arp_get(srcip,mac,sizeof(mac));
++		  	notify_to_wal(mac, header->ancount, daemon->packet+12);
++	  }
+ 	  header->id = htons(forward->orig_id);
+ 	  header->hb4 |= HB4_RA; /* recursion if available */
+ 	  send_from(forward->fd, option_bool(OPT_NOWILD) || option_bool (OPT_CLEVERBIND), daemon->packet, nn, 

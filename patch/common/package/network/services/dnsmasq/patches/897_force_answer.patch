@@ -1,0 +1,53 @@
+--- a/src/rfc1035.c	2015-06-10 17:17:52.325211168 +0800
++++ b/src/rfc1035.c	2015-06-10 17:18:30.165361105 +0800
+@@ -2346,3 +2346,50 @@
+   return len;
+ }
+ 
++
++size_t answer_request_force(struct dns_header *header, char *limit, size_t qlen, 
++		int family ,struct all_addr *addr){
++	unsigned char *ansp;
++	unsigned short type = T_A;
++	int auth = 1, trunc = 0;
++
++	if (!(ansp = skip_questions(header, qlen)))
++		return 0; /* bad packet */
++	
++	if(AF_INET == family) {
++#ifdef HAVE_IPV6
++	} else if(AF_INET6 == family) {
++		type = T_AAAA;
++#endif
++	} else {
++		return -1;
++	}
++
++	if (!(add_resource_record(header, limit, &trunc, sizeof(struct dns_header), &ansp, 
++			daemon->local_ttl, NULL, type, C_IN, 
++			type == T_A ? "4" : "6", addr))) {
++		return -1;
++	}
++
++	/* done all questions, set up header and return length of result */
++	/* clear authoritative and truncated flags, set QR flag */
++	header->hb3 = (header->hb3 & ~(HB3_AA | HB3_TC)) | HB3_QR;
++	/* set RA flag */
++	header->hb4 |= HB4_RA;
++	 
++	/* authoritive - only hosts and DHCP derived names. */
++	if (auth)
++	  header->hb3 |= HB3_AA;
++	
++	/* truncation */
++	if (trunc)
++	  header->hb3 |= HB3_TC;
++	
++	SET_RCODE(header, NOERROR); /* no error */
++	header->ancount = htons(1);
++	header->nscount = htons(0);
++	header->arcount = htons(0);
++
++	return ansp - (unsigned char *)header;
++}
++

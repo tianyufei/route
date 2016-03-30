@@ -1,0 +1,16 @@
+config usrcls visitor
+	option expire_check 	'0'	 	#是否进行超时检查
+	option expire_cls	'visitor' 	#超时以后切换成什么cls
+
+config usrcls general
+	option expire_check 	'0' 	 	#是否进行超时检查
+	option expire_cls	'general' 	#超时以后切换成什么cls
+
+config usrcls member
+	option expire_check 	'0' 	 	#是否进行超时检查
+	option expire_cls	'member' 	#超时以后切换成什么cls
+
+config usrcls vip
+	option expire_check 	'1' 	 	#是否进行超时检查
+	option expire_cls	'member' 	#超时以后切换成什么cls
+

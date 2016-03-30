@@ -1,0 +1,209 @@
+--- a/src/forward.c	2016-01-09 16:46:55.679164051 +0800
++++ b/src/forward.c	2016-01-09 18:32:38.433387687 +0800
+@@ -194,124 +194,95 @@
+ 
+ /*¨ª¡§?awal??¡¤¡é¡ã¡Á??¦Ì£¤*/
+ #define WEB_SITE_LEN_MAX 256
+-int notify_to_wal(char* mac,int num, char * query_ptr)
++int notify_to_wal(char* mac, char * query_ptr)
+ {
+-	static char website[WEB_SITE_LEN_MAX] = {0};
+ 	char *ptr = query_ptr;
+-	int tmp = 0,len = 0;
+-	short type = 0;
+-	short cls = 0;
+-	int i = 0;
+-	static char dbg[WEB_SITE_LEN_MAX] = {0};
++	short hd_id = 0;
++	short hd_flags = 0;
++	short que_num = 0;
++	short anser_num = 0;
++	short auth_num = 0;
++	short add_num = 0;
++	{
++		hd_id = ntohs(*(short*)ptr);
++		ptr += sizeof(hd_id);
++		hd_flags = ntohs(*(short*)ptr);
++		ptr += sizeof(hd_flags);
++		que_num = ntohs(*(short*)ptr);
++		ptr += sizeof(que_num);
++		anser_num = ntohs(*(short*)ptr);
++		ptr += sizeof(anser_num);
++		auth_num = ntohs(*(short*)ptr);
++		ptr += sizeof(auth_num);
++		add_num = ntohs(*(short*)ptr);
++		ptr += sizeof(add_num);
+ 
+-	//zdj
+-//	snprintf(dbg,sizeof(dbg)-1,"echo \"|%c|%c%c%c%c%c%c%c%c%c|\" >> /tmp/dnsdbg.log",
+-//		ptr[0],ptr[1],ptr[2],ptr[3],ptr[4],ptr[5],ptr[6],ptr[7],ptr[8],ptr[9]);
+-//	system(dbg);
++	}
+ 
+-//	return 0;
+ 	
+-	strncpy(website,ptr,sizeof(website));
+-	ptr += strlen(ptr) + 1;
+-	type = ntohs(*(short*)ptr);
+-	ptr += sizeof(type);
+-	cls = ntohs(*(short*)ptr);
+-	ptr += sizeof(cls);
+-
+-//	snprintf(dbg,sizeof(dbg)-1,"echo 'lookup:%s,get: type=%d, cls=%d, num=%d' >> /tmp/dnsdbg.log",&website[1],type,cls,num);
++	char* web = NULL;
++	int tmp = 0,len = 0;
++	int i = 0;
++//	static char dbg[WEB_SITE_LEN_MAX] = {0};
++	//queries.
++//	snprintf(dbg,sizeof(dbg)-1,"echo 'mac=%s,que_num=%d,anser_num=%d' >> /tmp/dns_debug.txt",
++//		mac,que_num,anser_num);
+ //	system(dbg);
+-
+-
+-	for(i=0;i<num;i++)
+ 	{
+-		DNS_RESPONSE *pResp = (DNS_RESPONSE *)ptr;
+-
+-		if(pResp->length == IPV4_ADDR_LEN)
+-		{
+-			char rsp_ip[64] = {0};
+-			snprintf(rsp_ip,sizeof(rsp_ip)-1,"%s",inet_ntoa(pResp->addr));
+-//			snprintf(dbg,sizeof(dbg)-1,"echo 'rsp[%d]%s,ttl=%d' >> /tmp/dnsdbg.log",i,rsp_ip,pResp->ttl);
++		short type = 0;
++		short cls = 0;
++		for(i = 0; i < que_num; i++){
++			web = ptr; 
++			ptr += strlen(ptr) + 1; //web name, such as www.sina.com
++			type = ntohs(*(short*)ptr);
++			ptr += sizeof(type);
++			cls = ntohs(*(short*)ptr);
++			ptr += sizeof(cls);			
++//			snprintf(dbg,sizeof(dbg)-1,"echo 'lookup:%s,get: type=%d, cls=%d, num=%d' >> /tmp/dns_debug.txt",web,type,cls,i);
+ //			system(dbg);
+-			if(func_notify_domain_ip)
+-			{
+-				func_notify_domain_ip(mac, &website[1], rsp_ip,pResp->ttl);
+-			}
+-			ptr += sizeof(DNS_RESPONSE);			
+-		}
+-		else
+-		{
+-			snprintf(dbg,sizeof(dbg)-1,"echo 'lookup:%s, rsp[%d] get ipv6 addr,ttl=%d' >> /tmp/dnsdbg.log",
+-				&website[1],i,pResp->ttl);
+-			system(dbg);
+-			ptr += sizeof(DNS_RESPONSE)+(pResp->length - IPV4_ADDR_LEN);			
+ 		}
+ 	}
+-	return 0;
+-	
+-#if 0
+-
+-	
+-//	my_syslog(LOG_ERR, _("query_ptr %s\n"), query_ptr);
+-	memset(website, 0, WEB_SITE_LEN_MAX+1);
+-	
+-	while(*ptr!=0)
+-	{
+-	tmp = *ptr;
+-	
+-	ptr++;/*???¨°?¨²¨¨Y*/
+-	if(len+tmp>WEB_SITE_LEN_MAX)
++	//answers
+ 	{
+-		my_syslog(LOG_ERR, _("UGLY! too long domain name, ignore the notification\n"));
+-		return -1;
+-	}
+-	memcpy(website+len,ptr,tmp);
+-	len = len +tmp;
+-	website[len] = '.';
+-	len++;
+-	ptr= ptr+tmp;/*¨¬?1y?¨²¨¨Y*/
+-	}
+-	website[len-1] = '\0';
+-	len++;
++		short domain = 0;
++		short type = 0;
++		short cls = 0;
++		int ttl = 0;
++		short len = 0;
++		for(i = 0; i < anser_num; i++){
++			domain = ntohs(*(short*)ptr);
++			ptr += sizeof(domain);
++
++			type = ntohs(*(short*)ptr);
++			ptr += sizeof(type);
++
++			cls = ntohs(*(short*)ptr);
++			ptr += sizeof(cls);
+ 
+-	my_syslog(LOG_INFO, _("len %d\n"), len);
+-	my_syslog(LOG_INFO, _("website %s\n"), website);
++			ttl =  ntohl(*(int*)ptr);
++			ptr += sizeof(ttl);
+ 
+-	char * answer_ptr=query_ptr+len+4;
+-	int i=0;
+-	char *web_ip=NULL; 
+-	DNS_RESPONSE *pResp = (DNS_RESPONSE *)answer_ptr;
+-	char *offset = answer_ptr;
+-	
+-	for(i=0;i<num;i++)
+-	{
+-		if(pResp->length == IPV4_ADDR_LEN)
+-		{
+-			web_ip = inet_ntoa(pResp->addr);
+-			my_syslog(LOG_INFO, _("DNS answer: website %s, ip %s\n"), website, web_ip);
+-			int ret;
+-			if(func_notify_domain_ip)
+-			{
+-				ret=func_notify_domain_ip(website, web_ip,pResp->ttl);
+-				my_syslog(LOG_INFO, _("****** notify return %d\n"), ret);
+-			}
+-			else
+-			{
+-				my_syslog(LOG_ERR, _("fatal error, NULL func_notify_domain_ip\n!"));
+-			}
+-			
++			len = ntohs(*(short*)ptr);
++			ptr += sizeof(len);
+ 
+-			offset = offset +sizeof(DNS_RESPONSE);
+-			pResp= offset;
+-		}
+-		else
+-		{
+-			offset = offset +sizeof(DNS_RESPONSE)+(pResp->length - IPV4_ADDR_LEN);
+-			pResp= offset;
++//			snprintf(dbg,sizeof(dbg)-1,"domain=0x%x,type=%d,cls=%d,ttl=%d,len=%d,addr=0x%x' >> /tmp/dns_debug.txt",
++//				domain,type,cls,ttl,len,*(int*)ptr);
++//			system(dbg);
++
++			if(type == 1){ //type A, IPv4
++				char rsp_ip[64] = {0};
++				struct in_addr addr;
++				memcpy(&addr,ptr,sizeof(addr));
++				snprintf(rsp_ip,sizeof(rsp_ip)-1,"%s",inet_ntoa(addr));
++				if(func_notify_domain_ip)
++				{
++					func_notify_domain_ip(mac, web, rsp_ip,ttl);
++				}
++			}
++			ptr += len;
+ 		}
+ 	}
+-
+ 	return 0;
+-#endif	
+ }
+ 
+ /* Send a UDP packet with its source address set as "source" 
+@@ -1383,7 +1354,8 @@
+ 			char srcip[44] = {0};
+ 			snprintf(srcip,sizeof(srcip)-1,"%s",inet_ntoa(forward->source.in.sin_addr));
+ 			dns_arp_get(srcip,mac,sizeof(mac));
+-		  	notify_to_wal(mac, header->ancount, daemon->packet+12);
++			if(strlen(mac) != 0)
++		  		notify_to_wal(mac, daemon->packet);
+ 	  }
+ 	  header->id = htons(forward->orig_id);
+ 	  header->hb4 |= HB4_RA; /* recursion if available */

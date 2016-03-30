@@ -1,0 +1,16 @@
+--- a/src/forward.c	2015-06-17 21:49:48.533806904 +0800
++++ b/src/forward.c	2015-06-17 21:47:36.785802363 +0800
+@@ -114,11 +114,11 @@
+ 		if(NULL == func_notify_domain_ip){
+ 			my_syslog(LOG_ERR, _("\n dlsym failed, wal_notify_domain_ip, error: %s \n"),dlerror());
+ 		} 
+-		func_find_black_ip=dlsym(g_libHandle,"wal_find_black_ip");
++/*		func_find_black_ip=dlsym(g_libHandle,"wal_find_black_ip");
+ 		if(NULL == func_find_black_ip){
+ 			my_syslog(LOG_ERR, _("\n dlsym failed, wal_find_black_ip, error: %s \n"),dlerror());
+ 		} 
+-		
++*/		
+ 	    if((error=dlerror())!=NULL)
+ 	    {
+ 	        my_syslog(LOG_ERR, _("\n some error(%s) in winlog_gather_shmem_set \n"),error);

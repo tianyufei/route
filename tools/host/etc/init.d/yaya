@@ -1,0 +1,25 @@
+#!/bin/sh /etc/rc.common
+
+export LD_LIBRARY_PATH=$PWD/out/host/lib:$LD_LIBRARY_PATH
+export PATH=$PWD/out/host/usr/bin/yaya:$PATH
+sudo cp -rf $PWD/out/host/etc/dbus-1/* /etc/dbus-1
+
+start() {
+	start_script.sh
+	sleep 3
+	intent srv_all_start
+        echo "All Services Start!"
+}
+
+stop() {
+	intent srv_all_stop
+	sleep 3
+ 	stop_script.sh
+        echo "All Services Stop!"
+}
+
+restart() {
+  	stop
+	start
+}
+

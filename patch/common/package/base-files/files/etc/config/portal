@@ -1,0 +1,67 @@
+config visitor
+	list white 		'.google.'  
+#self 		- local ip
+#gateway 	- gateway ip
+#url		- remote url
+#<ip>		- static ip
+	list black		'self .'
+#default policy is accept or deny
+	option default		'deny'
+	option mask		'0'
+	option order 		'white,black'
+	option squid		'0'
+
+config general
+	list white 		'.huahuawifi.'  
+	list white 		'.google.'  
+	list white		'.gtimg.'
+	list white		'cqmt.qq.'
+	list white		'.huahuawifi.'
+	list white		'.gdt.qq.'
+	list white 		'.google.'  
+	list white		'.talkingdata.'
+	list white		'.alipay.'
+	list white		'.umeng.'
+	list white		'.youmi'
+	list white		'.igexin.'
+	list black     		'self .'
+	option default		'deny'
+	option mask		'128'
+	option order 		'white,black'
+	option squid		'0'
+
+config member
+	list white 		'.huahuawifi.'  
+	list white 		'.google.'  
+	list white		'.gtimg.'
+	list white		'cqmt.qq.'
+	list white		'.huahuawifi.'
+	list white		'.gdt.qq.'
+	list white 		'.google.'  
+	list white		'.talkingdata.'
+	list white		'.alipay.'
+	list white		'.umeng.'
+	list white		'.youmi'
+	list white		'.igexin.'
+	list black     		'self .'
+	option default		'deny'
+	option mask		'64'
+	option order 		'white,black'
+	option squid		'0'
+
+config vip
+	list white		'.'
+	option default		'accept'
+	option mask		'32'
+	option order 		'white'
+	option squid		'1'
+
+config system
+	list white		'.'
+	option default		'accept'
+	option mask		'16'
+	option order 		'white'
+	option squid		'0'
+
+#config global
+

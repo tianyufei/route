@@ -1,0 +1,337 @@
+--- a/src/forward.c	2015-06-10 16:00:28.849051087 +0800
++++ b/src/forward.c	2015-06-10 17:09:00.493401502 +0800
+@@ -15,6 +15,9 @@
+ */
+ 
+ #include "dnsmasq.h"
++#include <dlfcn.h>
++#include <stdbool.h>
++
+ 
+ static struct frec *lookup_frec(unsigned short id, void *hash);
+ static struct frec *lookup_frec_by_sender(unsigned short id,
+@@ -31,6 +34,233 @@
+ 			   char *name, char *keyname);
+ #endif
+ 
++static void *g_libHandle = NULL;
++static int (*func_query_status)(char *, char *, char *, int) = NULL;
++static int (*func_notify_domain_ip)(char *, char *, long ) = NULL;
++static int (*func_find_black_ip)(char *, char *) = NULL;
++static int (*func_set_debug_info)(void (*debug_func)(int level, char* content)) = NULL;
++
++#define USER_INFO 0
++#define LOG_NORMAL 2
++
++#define IPV4_ADDR_LEN    4
++#pragma pack(1)
++#ifndef boolean
++#define boolean int
++#endif
++
++
++typedef struct dns_response //DNS?¨¬¨®|¨ºy?Y¡À¡§¡êo
++
++{
++unsigned short name; //2¨¦?¡¥¦Ì?¨®¨°??
++
++unsigned short type; //2¨¦?¡¥¨¤¨¤D¨ª
++
++unsigned short classes; //¨¤¨¤D¨ª??
++
++unsigned int ttl; //¨¦¨²¡ä?¨º¡À??
++
++unsigned short length; //¡Á¨º?¡ä¨ºy?Y3¡è?¨¨
++
++struct in_addr addr; //¡Á¨º?¡ä¨ºy?Ylength¡Á??¨²...
++
++}DNS_RESPONSE;
++
++
++/****************************************************************
++o¡¥¨ºy??:      dl_init
++1|?¨¹?¨¨¨º?:3?¨º??¡¥¡ä¨°?a12?¨ª?a
++2?¨ºy:
++¡¤¦Ì???¦Ì:
++¡À¨¤D¡ä:          lianghp/2015.3.1/
++****************************************************************/
++void dns_debug_output(int level, char* content){
++/*	if(level == 0){
++		my_syslog(LOG_ERR, _("%s\n"),content);
++	}else{
++		my_syslog(LOG_ERR, _("%s\n"),content);
++	}	
++*/
++	char buf[1024] = {0};
++	snprintf(buf,sizeof(buf)-1,"echo \"%s\" >> /tmp/dnsdebug.txt",content);
++	system(buf);
++}
++
++void dl_init()
++{
++	char *error;
++	if(NULL == g_libHandle){
++		g_libHandle = dlopen("/lib/libwal_interface.so",RTLD_GLOBAL|RTLD_LAZY);  
++		if(!g_libHandle)
++		{
++			my_syslog(LOG_ERR, _("\n dlopen failed, /lib/libwal_interface.so, error: %s \n"),dlerror());
++			return;
++		}
++
++		func_set_debug_info = dlsym(g_libHandle,"wal_set_debug_func"); 
++		if(NULL == func_set_debug_info){
++			my_syslog(LOG_ERR, _("\n dlsym failed, wal_set_debug_func, error: %s \n"),dlerror());
++		}else{
++			func_set_debug_info(dns_debug_output);		
++		}
++
++	    func_query_status=dlsym(g_libHandle,"wal_dns_access_status");
++		if(NULL == func_query_status){
++			my_syslog(LOG_ERR, _("\n dlsym failed, wal_dns_access_status, error: %s \n"),dlerror());
++		} 
++
++	    func_notify_domain_ip=dlsym(g_libHandle,"wal_notify_domain_ip");
++		if(NULL == func_notify_domain_ip){
++			my_syslog(LOG_ERR, _("\n dlsym failed, wal_notify_domain_ip, error: %s \n"),dlerror());
++		} 
++		func_find_black_ip=dlsym(g_libHandle,"wal_find_black_ip");
++		if(NULL == func_find_black_ip){
++			my_syslog(LOG_ERR, _("\n dlsym failed, wal_find_black_ip, error: %s \n"),dlerror());
++		} 
++		
++	    if((error=dlerror())!=NULL)
++	    {
++	        my_syslog(LOG_ERR, _("\n some error(%s) in winlog_gather_shmem_set \n"),error);
++	    }
++	    
++	}
++	return;
++}
++
++/****************************************************************
++o¡¥¨ºy??:      dl_destroy
++1|?¨¹?¨¨¨º?:1?¡À?12?¨ª?a
++2?¨ºy:
++¡¤¦Ì???¦Ì:
++¡À¨¤D¡ä:          lianghp/2015.3.1/
++****************************************************************/
++
++void dl_destroy()
++{
++	if(NULL != g_libHandle){
++		dlclose(g_libHandle);
++	}
++	g_libHandle = NULL;
++	func_query_status= NULL;
++	func_notify_domain_ip= NULL;
++	return;
++}
++
++
++/****************************************************************
++o¡¥¨ºy??:      dns_arp_get
++1|?¨¹?¨¨¨º?:dns¨ª¡§1yip??¨¨?mac
++2?¨ºy:
++¡¤¦Ì???¦Ì:
++¡À¨¤D¡ä:           lianghp/2015.3.1/
++****************************************************************/
++int dns_arp_get(char *req_ip, char* out, int out_size){
++    FILE *proc = NULL;
++	char ip[32] = {0};
++	char type[32] = {0};
++	char flag[32] = {0};
++	char mac[32] = {0};
++	char line[256] = {0};
++	int result = -1;
++
++	if(out && out_size)
++		out[0] = '\0';
++
++    if (!(proc = fopen("/proc/net/arp", "r"))) {
++        return result;
++    }
++
++
++	while(fgets(line,sizeof(line)-1,proc)){
++		ip[0] = '\0';
++		type[0] = '\0';
++		flag[0] = '\0';
++		mac[0] = '\0';
++		sscanf(line,"%s %s %s %s",ip,type,flag,mac);
++		if(strcmp(req_ip,ip) == 0){
++			if(out && out_size)
++				strncpy(out,mac,out_size-1);
++			result = 0;
++			break;
++		}
++	}
++
++    fclose(proc);
++
++    return result;
++}
++
++
++/*¨ª¡§?awal??¡¤¡é¡ã¡Á??¦Ì£¤*/
++#define WEB_SITE_LEN_MAX 255
++int notify_to_wal(int num, char * query_ptr)
++{
++	char website[WEB_SITE_LEN_MAX+1];
++	char *ptr = query_ptr;
++	int tmp = 0,len = 0;
++	
++	my_syslog(LOG_ERR, _("query_ptr %s\n"), query_ptr);
++	memset(website, 0, WEB_SITE_LEN_MAX+1);
++	
++	while(*ptr!=0)
++	{
++	tmp = *ptr;
++	
++	ptr++;/*???¨°?¨²¨¨Y*/
++	if(len+tmp>WEB_SITE_LEN_MAX)
++	{
++		my_syslog(LOG_ERR, _("UGLY! too long domain name, ignore the notification\n"));
++		return -1;
++	}
++	memcpy(website+len,ptr,tmp);
++	len = len +tmp;
++	website[len] = '.';
++	len++;
++	ptr= ptr+tmp;/*¨¬?1y?¨²¨¨Y*/
++	}
++	website[len-1] = '\0';
++	len++;
++
++	my_syslog(LOG_INFO, _("len %d\n"), len);
++	my_syslog(LOG_INFO, _("website %s\n"), website);
++
++	char * answer_ptr=query_ptr+len+4;
++	int i=0;
++	char *web_ip=NULL; 
++	DNS_RESPONSE *pResp = (DNS_RESPONSE *)answer_ptr;
++	char *offset = answer_ptr;
++	
++	for(i=0;i<num;i++)
++	{
++		if(pResp->length == IPV4_ADDR_LEN)
++		{
++			web_ip = inet_ntoa(pResp->addr);
++			my_syslog(LOG_INFO, _("DNS answer: website %s, ip %s\n"), website, web_ip);
++			int ret;
++			if(func_notify_domain_ip)
++			{
++				ret=func_notify_domain_ip(website, web_ip,pResp->ttl);
++				my_syslog(LOG_INFO, _("****** notify return %d\n"), ret);
++			}
++			else
++			{
++				my_syslog(LOG_ERR, _("fatal error, NULL func_notify_domain_ip\n!"));
++			}
++			
++
++			offset = offset +sizeof(DNS_RESPONSE);
++			pResp= offset;
++		}
++		else
++		{
++			offset = offset +sizeof(DNS_RESPONSE)+(pResp->length - IPV4_ADDR_LEN);
++			pResp= offset;
++		}
++	}
++
++	return 0;
++}
+ 
+ /* Send a UDP packet with its source address set as "source" 
+    unless nowild is true, when we just send it with the kernel default */
+@@ -1047,6 +1277,8 @@
+ 			      forward->flags & FREC_AD_QUESTION, forward->flags & FREC_DO_QUESTION, 
+ 			      forward->flags & FREC_ADDED_PHEADER, forward->flags & FREC_HAS_SUBNET, &forward->source)))
+ 	{
++	  if(header->qdcount)		
++	  	 notify_to_wal(header->ancount, daemon->packet+12);
+ 	  header->id = htons(forward->orig_id);
+ 	  header->hb4 |= HB4_RA; /* recursion if available */
+ 	  send_from(forward->fd, option_bool(OPT_NOWILD) || option_bool (OPT_CLEVERBIND), daemon->packet, nn, 
+@@ -1095,6 +1327,8 @@
+   int check_dst = !option_bool(OPT_NOWILD);
+ #endif
+ 
++  dl_init();
++
+   /* packet buffer overwritten */
+   daemon->srv_save = NULL;
+   
+@@ -1347,10 +1581,60 @@
+   else
+ #endif
+     {
+-      int ad_reqd, do_bit;
+-      m = answer_request(header, ((char *) header) + daemon->packet_buff_sz, (size_t)n, 
++
++	int redirect = 0;
++	int ad_reqd, do_bit;
++	dns_debug_output(1,"start--------\n");
++//	if(func_find_black_ip && func_query_status ){
++	if(func_query_status ){
++		char redirect_ip[80];
++		char *ip_tmp = NULL;  /*add for dns whitlist*/
++		char user_ip[32] = {0};
++		char dest_ip[32] = {0};
++		char user_mac[32] = {0}; /*add for dns whitlist*/
++		 struct all_addr device_addr;/*add for  addr*/
++
++		ip_tmp = inet_ntoa(dst_addr.addr.addr4);
++		if(ip_tmp){
++			strncpy(dest_ip,ip_tmp,sizeof(dest_ip)-1);
++		}
++
++		ip_tmp = inet_ntoa(source_addr.in.sin_addr);
++		if(ip_tmp){
++			strncpy(user_ip,ip_tmp,sizeof(user_ip)-1);
++		}
++
++		if(dns_arp_get(user_ip,user_mac,sizeof(user_mac))){
++			//local mac address!
++			my_syslog(LOG_INFO, _("----local macaddress1!, ip=%s, destip %s, mac=%s\n"),
++				user_ip,dest_ip,user_mac);
++		}else{
++			my_syslog(LOG_INFO, _("got domain query %s, userip %s, destip %s, usermac %s\n"), 
++				daemon->namebuff, user_ip, dest_ip,user_mac );
++			if(!func_query_status(user_mac, daemon->namebuff, redirect_ip, sizeof(redirect_ip))){
++				//DENY STATUS.
++				my_syslog(LOG_WARNING, _("****** query , namebuff=%s, redirect ip %s\n"), 
++					daemon->namebuff,	redirect_ip);
++				memset(&device_addr,0,sizeof(device_addr));
++				//inet_aton("192.168.2.1", &(device_addr.addr.addr4));
++				inet_aton(redirect_ip, &(device_addr.addr.addr4));
++				m = answer_request_force(header, ((char *) header) + daemon->packet_buff_sz, (size_t)n, 
++					listen->family, &device_addr);
++				send_from(listen->fd, option_bool(OPT_NOWILD) || option_bool (OPT_CLEVERBIND), (char *)header,	m, &source_addr, &dst_addr, if_index);    
++				daemon->local_answer++;
++				redirect = 1;
++			}
++		}
++	}else{
++		my_syslog(LOG_ERR, _("----get function inst form dll failed!\n"));
++	}
++	
++	if(!redirect) {
++
++		m = answer_request(header, ((char *) header) + daemon->packet_buff_sz, (size_t)n, 
+ 			 dst_addr_4, netmask, now, &ad_reqd, &do_bit);
+-      
++
++		my_syslog(LOG_WARNING, _("----Send to DNS SERVER, M=%d !\n"),m);
+       if (m >= 1)
+ 	{
+ 	  send_from(listen->fd, option_bool(OPT_NOWILD) || option_bool(OPT_CLEVERBIND),
+@@ -1364,6 +1648,8 @@
+ 	daemon->local_answer++;
+     }
+ }
++//	dl_destroy();
++}
+ 
+ #ifdef HAVE_DNSSEC
+ 

@@ -1,0 +1,41 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2007-2011 OpenWrt.org
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/bin/yaya
+export LD_LIBRARY_PATH=/lib/yaya
+START=99
+start() {
+	host=`romenv -m`
+	if [ "$host" != "" ]; then
+		uci set system.@system[0].hostname=$host
+		uci commit
+	fi
+
+	if [ ! -f "/etc/config/first_boot_flag" ] ; then
+		touch /etc/config/first_boot_flag
+		sync
+		sleep 1
+		reboot	
+	fi	
+
+	if [ -f "/usr/bin/yaya/start_script.sh" ]; then
+		/usr/bin/yaya/start_script.sh
+		sleep 3
+		intent srv_all_start
+	fi
+        echo "All Services Start!"
+}
+
+stop() {
+	intent srv_all_stop
+	sleep 3
+	if [ -f "/usr/bin/yaya/stop_script.sh" ]; then
+		/usr/bin/yaya/stop_script.sh
+	fi
+        echo "All Services Stop!"
+}
+
+restart() {
+    stop
+    start
+}
+

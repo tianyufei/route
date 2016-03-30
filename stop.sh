@@ -1,0 +1,2 @@
+./out/host/etc/init.d/yaya stop
+

@@ -1,0 +1,94 @@
+--- a/src/AccessLogEntry.cc	2016-02-19 18:31:00.519886639 +0800
++++ b/src/AccessLogEntry.cc	2016-02-19 18:31:17.247886071 +0800
+@@ -5,7 +5,7 @@
+  * contributions from numerous individuals and organizations.
+  * Please see the COPYING and CONTRIBUTORS files for details.
+  */
+-
++#include <stdio.h>
+ #include "squid.h"
+ #include "AccessLogEntry.h"
+ #include "HttpReply.h"
+@@ -49,6 +49,29 @@
+     log_ip.toStr(buf, bufsz);
+ }
+ 
++//add by zhengdajun
++void 
++AccessLogEntry::getMacFromIP(char *ip, char* mac, size_t bufsz){
++    if(mac && (bufsz >= 18)){
++        char cmdbuf[256] = {0};
++        mac[0] = '\0';
++        snprintf(cmdbuf,sizeof(cmdbuf)-1,"cat /proc/net/arp | grep '%s '",ip);
++        FILE* fp = popen(cmdbuf,"r");
++        if(fp){
++	    if(fgets(cmdbuf,sizeof(cmdbuf)-1,fp)){
++		if(strstr(cmdbuf,ip)){
++	        	char ips[32] = {0};
++                	char hwtype[32] = {0};
++                	char flag[32] = {0};
++	        	sscanf(cmdbuf,"%s %s %s %s",ips,hwtype,flag,mac);
++		}		
++	    }	
++    	    pclose(fp);
++        }
++    }
++}		
++//zhengdajun end
++
+ AccessLogEntry::~AccessLogEntry()
+ {
+     safe_free(headers.request);
+--- a/src/AccessLogEntry.h	2016-02-19 18:30:59.131886692 +0800
++++ b/src/AccessLogEntry.h	2016-02-19 18:31:12.647886184 +0800
+@@ -47,6 +47,10 @@
+     /// Knows about several alternate locations of the IP
+     /// including indirect forwarded-for IP if configured to log that
+     void getLogClientIp(char *buf, size_t bufsz) const;
++    //add by zhengdajun 
++    /// transfer from ip to mac
++    void getMacFromIP(char *ip, char* mac, size_t bufsz);		
++    // zhengdajun end
+ 
+     const char *url;
+ 
+--- a/src/log/FormatSquidIcap.cc	2016-02-19 18:30:59.031886733 +0800
++++ b/src/log/FormatSquidIcap.cc	2016-02-19 18:31:22.083885834 +0800
+@@ -56,11 +56,16 @@
+     if (user && !*user)
+         safe_free(user);
+ 
++    //add by zhengdajun
++    char client_mac[32] = {0};
++    al->getMacFromIP((char*)client,client_mac,sizeof(client_mac));	
++    //zhengdajun end
++ 
+     logfilePrintf(logfile, "%9ld.%03d %6d %s %s/%03d %" PRId64 " %s %s %s -/%s -\n",
+                   (long int) current_time.tv_sec,
+                   (int) current_time.tv_usec / 1000,
+                   al->icap.trTime,
+-                  client,
++                  client_mac, //#client, modifed by zhengdajun.
+                   al->icap.outcome,
+                   al->icap.resStatus,
+                   al->icap.bytesRead,
+--- a/src/log/FormatSquidNative.cc	2016-02-19 18:30:59.035886712 +0800
++++ b/src/log/FormatSquidNative.cc	2016-02-19 18:31:26.011885687 +0800
+@@ -54,11 +54,16 @@
+     else
+         method = al->http.method.image();
+ 
++   //add by zhengdajun
++    char client_mac[32] = {0};
++    al->getMacFromIP((char*)clientip,client_mac,sizeof(client_mac));	
++    //zhengdajun end
++ 
+     logfilePrintf(logfile, "%9ld.%03d %6d %s %s%s/%03d %" PRId64 " " SQUIDSBUFPH " %s %s %s%s/%s %s%s",
+                   (long int) current_time.tv_sec,
+                   (int) current_time.tv_usec / 1000,
+                   al->cache.msec,
+-                  clientip,
++                  client_mac, //#clientip, modifed by zhengdajun.
+                   LogTags_str[al->cache.code],
+                   al->http.statusSfx(),
+                   al->http.code,
